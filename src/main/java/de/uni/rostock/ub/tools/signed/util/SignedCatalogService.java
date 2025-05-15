@@ -31,6 +31,9 @@ import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpression;
 import javax.xml.xpath.XPathFactory;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 
@@ -43,13 +46,48 @@ import de.uni.rostock.ub.tools.signed.model.ShelfmarkObject;
  *
  */
 public class SignedCatalogService {
-    private SignedConfigService config;
+    private final SignedConfigService config;
 
     public SignedCatalogService(SignedConfigService config) {
         this.config = config;
     }
 
-    public ShelfmarkObject retrieveShelfmarkObjectFromOPACWithBarcode(String barcode) throws Exception {
+    public ShelfmarkObject retrieveShelfmarkObject(String barcode) throws Exception {
+        ShelfmarkObject resultShelfmark = null;
+        if (config.getConfig().getProperty("signed.folio.url") != null) {
+            resultShelfmark = retrieveShelfmarkObjectFromFOLIOWithBarcode(barcode);
+        } else if (config.getConfig().getProperty("signed.sru.url") != null) {
+            resultShelfmark = retrieveShelfmarkObjectFromOPACWithBarcode(barcode);
+        }
+        if (resultShelfmark == null) {
+            throw new NullPointerException("Das Quellsystem ist falsch konfiguriert.");
+        }
+        return resultShelfmark;
+    }
+
+    private ShelfmarkObject retrieveShelfmarkObjectFromFOLIOWithBarcode(String barcode) throws Exception {
+        URL url = new URL(config.getConfig().getProperty("signed.folio.url").replace("${barcode}", barcode));
+        System.out.println("KatalogSuche: " + url.toString());
+        ObjectMapper objectMapper = new ObjectMapper();
+        JsonNode jsonNode;
+
+        try (InputStream is = url.openStream()) {
+            jsonNode = objectMapper.readTree(is);
+        }
+
+        if (jsonNode == null) {
+            throw new NullPointerException("Katalogisat konnte nicht gelesen werden");
+        }
+
+        // TODO Check if value
+        //result.setSignature(jsonNode.get("items").get("callNumber").asText());
+        //result.setLoanindicator(jsonNode.get("items").get("permanentLoanType").get("name").asText());
+        //result.setLocation(jsonNode.get("items").get("effectiveLocation").get("name").asText());
+
+        return new ShelfmarkObject("", "", "");
+    }
+
+    private ShelfmarkObject retrieveShelfmarkObjectFromOPACWithBarcode(String barcode) throws Exception {
         URL url = new URL(config.getConfig().getProperty("signed.sru.url").replace("${barcode}", barcode));
         System.out.println("KatalogSuche: " + url.toString());
         DocumentBuilderFactory builderFactory = DocumentBuilderFactory.newInstance();
